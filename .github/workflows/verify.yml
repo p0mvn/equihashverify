@@ -17,3 +17,13 @@ jobs:
       - run: cmake -S . -B native-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix)"
       - run: cmake --build native-build -j2
       - run: ctest --test-dir native-build --output-on-failure
+  node:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: sudo apt-get update && sudo apt-get install -y libsodium-dev libboost-dev
+      - run: npm ci
+      - run: npm test

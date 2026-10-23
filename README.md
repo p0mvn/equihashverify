@@ -24,9 +24,8 @@ ev.verify(header, solution);
 
 # Test Suite:
 ````
-sudo npm install -g mocha
-npm install
-mocha
+npm ci
+npm test
 ````
 
 
@@ -65,8 +64,23 @@ Enable `EQUIHASH_BUILD_BENCHMARK=ON` to build `pool_bench`; compare backends on
 the same quiet host. The algorithm follows Common revision
 `7759b1f5f8b2597599e39610558eaafca752b4b6` and RFC 7693.
 
-This change keeps the existing Node package and toolchain requirements. Modern
-Node support and addon compatibility fixes are maintained in the follow-up PR.
+## Modern Node addon
+
+Use Node 20 or newer and system-installed libsodium. The addon uses C++20 for
+current Node headers; the native C++ API still requires only C++11. Dependencies
+are locked for reproducible `npm ci` installs. Node 22 and 24 are covered by the
+compatibility checks used during development.
+
+The existing two-argument and four-argument calls use the same native dispatcher:
+AVX2/scalar by default, with AVX512 only when `EQUIHASH_ENABLE_AVX512=1` is set
+before starting Node and the hardware supports it. The addon validates buffers and lengths before reading them. It
+retains a native Buffer constructor so replacing or removing `global.Buffer`
+before or after loading cannot change validation. Ordinary typed arrays remain
+invalid, and exceptions from custom instance checks are preserved.
+
+The asserting suite covers the proof corpus, malformed API arguments, the
+`(48,5)` regtest genesis proof and its mutations, and correctly sized invalid
+proofs for every retained parameter pair. Other parameter verifiers are unchanged.
 
 ## AVX512 and reference qualification
 

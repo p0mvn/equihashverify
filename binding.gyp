@@ -1,64 +1,55 @@
 {
-    "targets": [
-        {
-            "target_name": "equihashverify",
-            "dependencies": [
-
-            ],
-            "sources": [
-                "support/cleanse.cpp",
-                "uint256.cpp",
-                "arith_uint256.cpp",
-                "random.cpp",   
-                "util.cpp",
-                "utilstrencodings.cpp",
-                "crypto/equihash.cpp",
-                "crypto/equihash_200_9.cpp",
-                "crypto/equihash_avx2.cpp",
-                "crypto/equihash_avx512.cpp",
-                "crypto/hmac_sha256.cpp",
-                "crypto/hmac_sha512.cpp",
-                "crypto/ripemd160.cpp",
-                "crypto/sha1.cpp",
-                "crypto/sha256.cpp",
-                "crypto/sha512.cpp",
-                "equihashverify.cc"                
-            ],
+  "targets": [
+    {
+      "target_name": "equihashverify",
+      "sources": [
+        "crypto/equihash.cpp",
+        "crypto/equihash_200_9.cpp",
+        "crypto/equihash_avx2.cpp",
+        "crypto/equihash_avx512.cpp",
+        "util.cpp",
+        "equihashverify.cc"
+      ],
+      "include_dirs": [
+        "<!(node -e \"require('nan')\")",
+        "."
+      ],
+      "cflags_cc!": [
+        "-fno-exceptions"
+      ],
+      "cflags_cc": [
+        "-std=c++20",
+        "-fexceptions",
+        "-UNDEBUG"
+      ],
+      "libraries": [
+        "-lsodium"
+      ],
+      "conditions": [
+        [
+          "OS==\"mac\"",
+          {
             "include_dirs": [
-                "<!(node -e \"require('nan')\")",
-                ".",
-                "/usr/include",
-                "/usr/include/boost",
+              "/opt/homebrew/include",
+              "/usr/local/include"
             ],
-            "libararies": [
-                "/usr/lib/x86_64-linux-gnu"
+            "libraries": [
+              "-L/opt/homebrew/lib",
+              "-L/usr/local/lib"
             ],
-            "defines": [
-            "HAVE_DECL_STRNLEN=1",
-            "HAVE_BYTESWAP_H=1"
-            ],
-            "cflags_cc": [
-                "-std=c++11",
-                "-Wl,--whole-archive",
-                "-fPIC",
-                "-fexceptions"
-                
-            ],
-            "link_settings": {
-                "libraries": [
-                    "-Wl,-rpath,./build/Release/",
-                    "-lboost_system",
-                    "-lsodium"
-                ]
-            },
-            'conditions': [
-                ['OS=="mac"', {
-                    'xcode_settings': {
-                        'GCC_ENABLE_CPP_EXCEPTIONS': 'YES'
-                    }
-                }]
-            ]
-        }
-    ]
+            "xcode_settings": {
+              "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
+              "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
+              "GCC_PREPROCESSOR_DEFINITIONS": [
+                "$(inherited)"
+              ],
+              "OTHER_CPLUSPLUSFLAGS": [
+                "-UNDEBUG"
+              ]
+            }
+          }
+        ]
+      ]
+    }
+  ]
 }
-
