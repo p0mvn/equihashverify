@@ -29,3 +29,41 @@ npm install
 mocha
 ````
 
+
+## Native C++ verification
+
+The `(200,9)` verifier uses a bounded tree walk and four-lane BLAKE2b hashing.
+AVX2 is selected automatically when the CPU and OS support it; other hosts use
+the scalar implementation with identical proof checks. Other parameter sets
+retain their existing verifier. No Rust toolchain is needed.
+
+On Ubuntu install `build-essential cmake libsodium-dev libboost-dev`, then:
+
+```sh
+cmake -S . -B native-build -DCMAKE_BUILD_TYPE=Release
+cmake --build native-build -j8
+ctest --test-dir native-build --output-on-failure
+```
+
+Include `crypto/equihash_avx2.h`, call
+`VerifyEquihash2009(header, header_len, solution, solution_len)`, and link the
+native library, libsodium and pthread. Native code requires C++11. The header
+must contain exactly 140 bytes including the nonce; the solution is 1,344 bytes
+without its CompactSize prefix. Buffers are borrowed for the call. Null pointers
+and incorrect lengths return false. Calls are concurrent and do not allocate or
+log. Proof validity does not establish share difficulty, freshness or credit.
+
+Only the SIMD kernels have architecture-specific target attributes. Do not add
+global `-mavx2` or `-march=native` flags for a mixed fleet. Set
+`EQUIHASH_REQUIRE_AVX2=ON` during hardware qualification to fail if the kernel
+cannot execute; that option does not change runtime selection.
+
+The native tests compare the public entry point and explicit kernels against the
+legacy verifier and libsodium. `tests/reference.py --check` regenerates proof and
+hash oracles from the committed seed proofs using independent Python hashlib.
+Enable `EQUIHASH_BUILD_BENCHMARK=ON` to build `pool_bench`; compare backends on
+the same quiet host. The algorithm follows Common revision
+`7759b1f5f8b2597599e39610558eaafca752b4b6` and RFC 7693.
+
+This change keeps the existing Node package and toolchain requirements. Modern
+Node support and addon compatibility fixes are maintained in the follow-up PR.
