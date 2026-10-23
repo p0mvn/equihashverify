@@ -40,9 +40,13 @@ int main(int argc, char **argv) {
     return 2;
   const auto kernel = backend == "scalar" ? equihash2009::ScalarHashFour
                                           : equihash2009::Avx2HashFour();
-  if (backend != "legacy" && backend != "scalar" && backend != "avx2")
+  if (backend != "legacy" && backend != "scalar" && backend != "avx2" &&
+      backend != "avx512")
     return 2;
-  if (backend != "legacy" && !kernel)
+  const auto wide = equihash2009::Avx512HashEight();
+  if (backend == "avx512" && !wide)
+    return 2;
+  if (backend != "legacy" && backend != "avx512" && !kernel)
     return 2;
   std::ifstream input(argv[2]);
   std::string line;
@@ -54,12 +58,17 @@ int main(int argc, char **argv) {
       return 2;
     if ((workload == "valid" && verdict == "valid") ||
         (workload == "early" && name == "duplicate-index-511") ||
-        (workload == "late" && name == "root-nonzero"))
+        (workload == "late" && name == "root-nonzero") ||
+        (workload == "order" && name == "swap-height-8-start-0"))
       cases.push_back({verdict == "valid", decode(header), decode(solution)});
   }
   if (cases.empty() || !freopen("/dev/null", "w", stdout))
     return 2;
   auto verify = [&](const Proof &p) {
+    if (backend == "avx512")
+      return equihash2009::VerifyWithHashEight(
+          wide, p.header.data(), p.header.size(), p.solution.data(),
+          p.solution.size());
     return backend == "legacy" ? legacy(p)
                                : equihash2009::VerifyWithHashFour(
                                      kernel, p.header.data(), p.header.size(),
@@ -76,6 +85,13 @@ int main(int argc, char **argv) {
   std::vector<std::thread> workers;
   for (size_t thread = 0; thread < threads; ++thread)
     workers.emplace_back([&, thread] {
+      const uint64_t warm_until = ns(CLOCK_MONOTONIC) + 50000000;
+      size_t warmup = 0;
+      do {
+        const auto &proof = cases[(warmup++ + thread) % cases.size()];
+        if (verify(proof) != proof.valid)
+          ++failures;
+      } while (ns(CLOCK_MONOTONIC) < warm_until);
       ++ready;
       while (!go.load(std::memory_order_acquire))
         std::this_thread::yield();

@@ -5,6 +5,7 @@
 #include "equihash_200_9_internal.h"
 #include "equihash_avx2.h"
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 namespace equihash2009 {
 const uint64_t IV[8] = {0x6a09e667f3bcc908ULL, 0xbb67ae8584caa73bULL,
@@ -129,10 +130,14 @@ bool DecodeAndCheckIndices(const uint8_t *solution,
   }
   return true;
 }
-bool VerifyWithHashFour(HashFour hash_four, const uint8_t *header,
-                        size_t header_len, const uint8_t *solution,
-                        size_t solution_len) {
-  if (!hash_four || !header || !solution || header_len != 140 ||
+namespace {
+template <size_t Lanes>
+bool VerifyWithHashGroups(HashGroups hash_groups, const uint8_t *header,
+                          size_t header_len, const uint8_t *solution,
+                          size_t solution_len) {
+  static_assert(Lanes == 4 || Lanes == 8,
+                "Hash groups must fill the 64-leaf batch");
+  if (!hash_groups || !header || !solution || header_len != 140 ||
       solution_len != 1344)
     return false;
   std::array<uint32_t, 512> indices;
@@ -142,11 +147,11 @@ bool VerifyWithHashFour(HashFour hash_four, const uint8_t *header,
   InitialiseMidstate(header, h);
   uint8_t pending[10][30] = {}, row[30], digests[64][64];
   for (size_t batch = 0; batch < 512; batch += 64) {
-    for (size_t j = 0; j < 64; j += 4) {
-      uint32_t groups[4];
-      for (int lane = 0; lane < 4; ++lane)
+    for (size_t j = 0; j < 64; j += Lanes) {
+      uint32_t groups[Lanes];
+      for (size_t lane = 0; lane < Lanes; ++lane)
         groups[lane] = indices[batch + j + lane] / 2;
-      hash_four(h, header + 128, groups, digests + j);
+      hash_groups(h, header + 128, groups, digests + j);
     }
     for (size_t j = 0; j < 64; ++j) {
       size_t leaf = batch + j;
@@ -179,6 +184,19 @@ bool VerifyWithHashFour(HashFour hash_four, const uint8_t *header,
   }
   return pending[9][0] == 0 && pending[9][1] == 0 && pending[9][2] == 0;
 }
+} // namespace
+
+bool VerifyWithHashFour(HashFour hash, const uint8_t *header, size_t header_len,
+                        const uint8_t *solution, size_t solution_len) {
+  return VerifyWithHashGroups<4>(hash, header, header_len, solution,
+                                 solution_len);
+}
+bool VerifyWithHashEight(HashEight hash, const uint8_t *header,
+                         size_t header_len, const uint8_t *solution,
+                         size_t solution_len) {
+  return VerifyWithHashGroups<8>(hash.function_, header, header_len, solution,
+                                 solution_len);
+}
 
 HashFour SelectedHashFour() {
   static const HashFour selected = [] {
@@ -191,6 +209,15 @@ HashFour SelectedHashFour() {
 bool Equihash2009HasAvx2() { return equihash2009::Avx2HashFour() != nullptr; }
 bool VerifyEquihash2009(const uint8_t *header, size_t header_len,
                         const uint8_t *solution, size_t solution_len) {
+  static const auto wide = [] {
+    const char *enabled = std::getenv("EQUIHASH_ENABLE_AVX512");
+    return enabled && std::strcmp(enabled, "1") == 0
+               ? equihash2009::Avx512HashEight()
+               : equihash2009::HashEight();
+  }();
+  if (wide)
+    return equihash2009::VerifyWithHashEight(wide, header, header_len, solution,
+                                            solution_len);
   return equihash2009::VerifyWithHashFour(equihash2009::SelectedHashFour(),
                                           header, header_len, solution,
                                           solution_len);

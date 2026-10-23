@@ -33,8 +33,8 @@ mocha
 ## Native C++ verification
 
 The `(200,9)` verifier uses a bounded tree walk and four-lane BLAKE2b hashing.
-AVX2 is selected automatically when the CPU and OS support it; other hosts use
-the scalar implementation with identical proof checks. Other parameter sets
+The public entry point automatically selects AVX2, then scalar, according to
+CPU and OS support. AVX512 requires explicit opt-in. All backends use identical proof checks. Other parameter sets
 retain their existing verifier. No Rust toolchain is needed.
 
 On Ubuntu install `build-essential cmake libsodium-dev libboost-dev`, then:
@@ -67,3 +67,32 @@ the same quiet host. The algorithm follows Common revision
 
 This change keeps the existing Node package and toolchain requirements. Modern
 Node support and addon compatibility fixes are maintained in the follow-up PR.
+
+## AVX512 and reference qualification
+
+AVX512 hashes eight leaf groups per call and is disabled in default dispatch.
+Set `EQUIHASH_ENABLE_AVX512=1` before starting the service to prefer AVX512 when
+runtime detection permits execution; unsupported hosts still use AVX2 or scalar:
+
+```sh
+EQUIHASH_ENABLE_AVX512=1 ./pool-service
+# The Node addon inherits the same setting:
+EQUIHASH_ENABLE_AVX512=1 node pool.js
+```
+
+Only the value `1` enables this path. The setting is read on the first native
+verification call and cached. Changing it later requires restarting the process.
+Do not add global AVX512 compiler flags. `EQUIHASH_REQUIRE_AVX512=ON` makes
+qualification fail when AVX512 is unavailable; it does not force runtime use.
+The benchmark accepts `avx512` for an explicit comparison with `avx2` or scalar.
+
+The optional `tests/check_rust.py` comparison uses a clean local Common checkout
+at `7759b1f5f8b2597599e39610558eaafca752b4b6`. It builds outside that checkout
+and compares its verifier with the public entry point and explicit kernels:
+
+```sh
+python3 tests/check_rust.py --common /path/to/common --build-dir /tmp/equihash-rust-check
+```
+
+Use `--require-avx2` or `--require-avx512` to require hardware qualification;
+`--offline` uses cached Cargo dependencies. Ordinary native builds need no Rust.
